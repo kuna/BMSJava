@@ -413,4 +413,10 @@ public class BMSData {
 	public void addNote(BMSKeyData bkd) {
 		bmsdata.add(bkd);
 	}
+	
+	public void dispose() {
+		bmsdata.clear();
+		bgadata.clear();
+		bgmdata.clear();
+	}
 }
