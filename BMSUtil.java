@@ -1,4 +1,4 @@
-package com.kuna.sabuneditor_android.bms;
+package com.kuna.rhythmus.bmsdata;
 
 import java.math.BigInteger;
 import java.security.MessageDigest;
@@ -7,12 +7,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 
-import android.util.Log;
-
 public class BMSUtil {
 	public static void Log(String title, String desc) {
 		/* your customize part ! */
-		Log.i(title, desc);
 	}
 
 	public static String GetHash(byte[] data) {
@@ -22,7 +19,7 @@ public class BMSUtil {
 			md = MessageDigest.getInstance("MD5");
 			hash = new BigInteger(1, md.digest( data )).toString(16);
 		} catch (NoSuchAlgorithmException e) {
-			Log.i("BMSUtil", "Hashing Error!");
+			BMSUtil.Log("BMSUtil", "Hashing Error!");
 			e.printStackTrace();
 		}
 		return hash;
@@ -70,9 +67,6 @@ public class BMSUtil {
 	}
 	
 	public static BMSKeyData cloneKeyData(BMSKeyData bkd) {
-		if (bkd.key == 2) {
-			Log.e("UNEXPRECTED", "UNEXPECTED");
-		}
 		BMSKeyData b = new BMSKeyData();
 		b.attr = bkd.attr;
 		b.beat = bkd.beat;

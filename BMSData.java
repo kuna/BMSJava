@@ -1,4 +1,4 @@
-package com.kuna.sabuneditor_android.bms;
+package com.kuna.rhythmus.bmsdata;
 
 import java.util.ArrayList;
 import java.util.List;

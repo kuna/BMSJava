@@ -1,4 +1,4 @@
-package com.kuna.sabuneditor_android.bms;
+package com.kuna.rhythmus.bmsdata;
 
 import java.io.BufferedInputStream;
 import java.io.File;
