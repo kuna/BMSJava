@@ -156,45 +156,49 @@ public class BMSParser {
 		return true;
 	}
 	
-	private static void ExecutePreProcessor(String line, BMSData bd) {
+	public static void ExecutePreProcessor(BMSData bd) {
 		// this will modify BMSData
 		// TODO check this thing may executed layer
-		// preprocessor
-		if (line.toUpperCase().startsWith("#RANDOM") || line.toUpperCase().startsWith("#SETRANDOM")) {
-			String args[] = line.split(" ");
-			int val = Integer.parseInt(args[1]);
-			randomVal[randomStackCnt++] = (int)(Math.random()*val);
-			return;
-		} else if (line.toUpperCase().startsWith("#IF")) {
-			String args[] = line.split(" ");
-			int val = Integer.parseInt(args[1]);
-			if (val == randomVal[randomStackCnt-1])
-				condition[randomStackCnt-1] = 2;
-			else
-				condition[randomStackCnt-1] = 0;
-			return;
-		} else if (line.toUpperCase().startsWith("#ELSEIF")) {
-			if (condition[randomStackCnt-1] == 2) {
-				condition[randomStackCnt-1] = 3;
+		
+		String data = bd.preprocessCommand;
+		for (String line: data.split("\n")) {
+			// preprocessor
+			if (line.toUpperCase().startsWith("#RANDOM") || line.toUpperCase().startsWith("#SETRANDOM")) {
+				String args[] = line.split(" ");
+				int val = Integer.parseInt(args[1]);
+				randomVal[randomStackCnt++] = (int)(Math.random()*val);
+				return;
+			} else if (line.toUpperCase().startsWith("#IF")) {
+				String args[] = line.split(" ");
+				int val = Integer.parseInt(args[1]);
+				if (val == randomVal[randomStackCnt-1])
+					condition[randomStackCnt-1] = 2;
+				else
+					condition[randomStackCnt-1] = 0;
+				return;
+			} else if (line.toUpperCase().startsWith("#ELSEIF")) {
+				if (condition[randomStackCnt-1] == 2) {
+					condition[randomStackCnt-1] = 3;
+					return;
+				}
+				
+				String args[] = line.split(" ");
+				int val = Integer.parseInt(args[1]);
+				if (val == randomVal[randomStackCnt-1])
+					condition[randomStackCnt-1] = 2;
+				else
+					condition[randomStackCnt-1] = 0;
+				return;
+			} else if (line.compareToIgnoreCase("#ENDIF") == 0) {
+				condition[--randomStackCnt] = 0;
 				return;
 			}
-			
-			String args[] = line.split(" ");
-			int val = Integer.parseInt(args[1]);
-			if (val == randomVal[randomStackCnt-1])
-				condition[randomStackCnt-1] = 2;
-			else
-				condition[randomStackCnt-1] = 0;
-			return;
-		} else if (line.compareToIgnoreCase("#ENDIF") == 0) {
-			condition[--randomStackCnt] = 0;
-			return;
+			if (randomStackCnt > 0) {
+				if (condition[randomStackCnt-1] == 1 || condition[randomStackCnt-1] == 3)
+					return;
+			}
+			// preprocessor end
 		}
-		if (randomStackCnt > 0) {
-			if (condition[randomStackCnt-1] == 1 || condition[randomStackCnt-1] == 3)
-				return;
-		}
-		// preprocessor end
 	}
 	
 	private static void PreProcessBMSLine(String line, BMSData bd) {
@@ -479,7 +483,7 @@ public class BMSParser {
 	}
 	
 	// MUST USE AFTER PARSING & SORTING!
-	private void setTimemark(BMSData bd) {
+	public static void setTimemark(BMSData bd) {
 		double _bpm = bd.BPM;		// BPM for parsing
 		double _time = 0;		// time for parsing
 		double _beat = 0;		// beat for parsing
