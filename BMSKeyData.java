@@ -12,10 +12,15 @@ public class BMSKeyData implements Comparable<BMSKeyData> {
 	int key;
 	double value;
 	double time;
+	boolean isLNfirst = false;
 	int layernum;	// used such as BGM
 	
 	double posy;
 	int attr;
+	
+	public boolean isLNFirst() {
+		return isLNfirst;
+	}
 	
 	public double getBeat() {
 		return beat;
@@ -46,6 +51,22 @@ public class BMSKeyData implements Comparable<BMSKeyData> {
 	
 	public void setValue(int val) {
 		value = val;
+	}
+	
+	public int getAttr() {
+		return attr;
+	}
+	
+	public void setAttr(int val) {
+		attr = val;
+	}
+	
+	public boolean isProcessed() {
+		return (attr != 0);
+	}
+	
+	public void setProcessed() {
+		attr = 1;
 	}
 	
 	public void setPosY(double val) {

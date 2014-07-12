@@ -11,11 +11,28 @@ public class BMSUtil {
 	public static void Log(String title, String desc) {
 		/* your customize part ! */
 	}
+	
+	public static String CheckEncoding(byte[] BOM) {
+		if( (BOM[0] & 0xFF) == 0xEF && (BOM[1] & 0xFF) == 0xBB && (BOM[2] & 0xFF) == 0xBF )
+			return "UTF-8";
+		else if( (BOM[0] & 0xFF) == 0xFE && (BOM[1] & 0xFF) == 0xFF )
+			return "UTF-16BE";
+		else if( (BOM[0] & 0xFF) == 0xFF && (BOM[1] & 0xFF) == 0xFE )
+			return "UTF-16LE";
+		else if( (BOM[0] & 0xFF) == 0x00 && (BOM[1] & 0xFF) == 0x00 && 
+				(BOM[0] & 0xFF) == 0xFE && (BOM[1] & 0xFF) == 0xFF )
+			return "UTF-32BE";
+		else if( (BOM[0] & 0xFF) == 0xFF && (BOM[1] & 0xFF) == 0xFE && 
+				(BOM[0] & 0xFF) == 0x00 && (BOM[1] & 0xFF) == 0x00 )
+			return "UTF-32LE";
+		else
+			return "ANSI";
+	}
 
 	public static String GetHash(byte[] data) {
-		MessageDigest md;
 		String hash = null;
 		try {
+			MessageDigest md;
 			md = MessageDigest.getInstance("MD5");
 			hash = new BigInteger(1, md.digest( data )).toString(16);
 		} catch (NoSuchAlgorithmException e) {

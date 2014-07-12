@@ -5,8 +5,11 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.util.Collections;
+
+import com.badlogic.gdx.Gdx;
 
 public class BMSParser {
 	public static int BMS_LOCALE_NONE = 0;
@@ -17,14 +20,13 @@ public class BMSParser {
 	private static int[] LNprevVal = new int[120];
 	private static BMSKeyData[] LNKey = new BMSKeyData[120];
 	private static int[] BGALayerCount;
-	
+
+	private static int BMSParseMode;
 	private static int BMS_PARSER_HEADER = 1;
 	private static int BMS_PARSER_MAINDATA = 2;
 	private static int BMS_PARSER_BGA = 3;
 
-	private static int[] BMSKeyIndex = new int[]{1, 2, 3, 4, 5, 8, 9, 6};
 	private static int[] BMSKeyCount = new int[14];
-	private static int BMSParseMode;
 	private static int randomStackCnt;
 	private static int[] randomVal = new int[256];		// Maximum stack: 256
 	private static int[] condition = new int[256];		// 0: read line, 1: ignore line, 2: executing command, 3: command already executed
@@ -32,11 +34,10 @@ public class BMSParser {
 	public static boolean LoadBMSFile(String path, BMSData bd) {
 		BMSUtil.Log("BMSParser", "Loading BMS File ... " + path);
 		File f = new File(path);
-		int locale;
 		
 		bd.path = path;
 		bd.dir = path.substring(0, path.length() - f.getName().length());
-		
+
 		//Read text from file
 		long Filesize = f.length();
 	    byte[] bytes = new byte[(int) Filesize];
@@ -51,27 +52,47 @@ public class BMSParser {
 	        e.printStackTrace();
 	        return false;
 	    }
+	    
+	    return LoadBMSFile(bytes, bd);
+	}
+	
+	public static boolean LoadBMSFile(byte[] bytes, BMSData bd) {
+		BMSUtil.Log("BMSParser", "checking locale...");
+		
+		// just process data
+		bd.hash = BMSUtil.GetHash(bytes);
 		
 		// check locale
+		String locale = BMSUtil.CheckEncoding(bytes);
 	    String data;
-	    try {
-			locale = BMS_LOCALE_JP;
-			data = new String(bytes, "SHIFT_JIS");
-			byte[] b = data.getBytes();
-			for (int i=0; i< ((data.length()>1000)?1000:data.length()) ; i++) {
-				if (b[i] >= 44032 && b[i] <= 55203) {
-					locale = BMS_LOCALE_KR;
+	    
+	    if (locale.compareTo("ANSI") == 0) {
+		    try {
+		    	// attempt SHIFT_JIS first
+		    	// we also can use https://github.com/hnakamur/sjis-check,
+		    	// but it may be too much slow in mobile device.
+				data = new String(bytes, "SHIFT_JIS");
+				byte[] b = data.getBytes();
+				for (int i=0; i< ((data.length()>1000)?1000:data.length()) ; i++) {
+					if (b[i] >= 44032 && b[i] <= 55203) {
+						// EUC-KR encoding
+						data = new String(bytes, "CP949");
+						break;
+					}
 				}
+		    } catch (UnsupportedEncodingException e) {
+		    	BMSUtil.Log("BMSParser", "Unsupported Encoding Exception");
+		    	return false;
+		    }
+	    } else {
+	    	try {
+				data = new String(bytes, locale);
+			} catch (UnsupportedEncodingException e) {
+		    	BMSUtil.Log("BMSParser", "Unsupported Encoding Exception");
+		    	return false;
 			}
-			if (locale == BMS_LOCALE_KR) {
-				data = new String(bytes, "CP949");
-			}
-	    } catch (UnsupportedEncodingException e) {
-	    	BMSUtil.Log("BMSParser", "Unsupported Encoding Exception");
-	    	return false;
 	    }
 		
-		bd.hash = BMSUtil.GetHash(bytes);
 		
 		// init before parshing
 		for (int i=0; i<14; i++) {
@@ -99,8 +120,9 @@ public class BMSParser {
 		bd.bmsdata.clear();
 		bd.bgmdata.clear();
 		bd.bgadata.clear();
-		
-		String[] lines = data.split("\r\n");
+
+		data = data.replace("\r\n", "\n");
+		String[] lines = data.split("\n");
 
 		for (int i=0; i<lines.length; i++) {
 			PreProcessBMSLine(lines[i].trim(), bd);
@@ -149,7 +171,7 @@ public class BMSParser {
 		
 		// total : 160+(note)*0.16
 		if (bd.total == 0) {
-			bd.total = (int) (bd.notecnt*0.16f + 160);
+			bd.getTotal();
 		}
 
 		BMSUtil.Log("BMSParser", "Parse finished");
@@ -161,6 +183,8 @@ public class BMSParser {
 		// TODO check this thing may executed layer
 		
 		String data = bd.preprocessCommand;
+		if (data == null)
+			return;
 		for (String line: data.split("\n")) {
 			// preprocessor
 			if (line.toUpperCase().startsWith("#RANDOM") || line.toUpperCase().startsWith("#SETRANDOM")) {
@@ -382,7 +406,6 @@ public class BMSParser {
 					} else if (nData.isBPMExtChannel()) {
 						nData.value = bd.getBPM(val);
 						nData.setBPMChannel();  // for ease
-						//nData.value = val;
 						bd.bmsdata.add(nData);
 					} else if (nData.isSTOPChannel()) {
 						nData.value = bd.getSTOP(val);
@@ -395,37 +418,9 @@ public class BMSParser {
 						// BGA
 						bd.bgadata.add(nData);
 					} else if (nData.is1PChannel() || nData.is2PChannel()) {
-						// check LNOBJ command
-						if (bd.LNObj[val]) {
-							// if LNObj is true,
-							// find previous LN obj(unused) and set etime.
-							// if no previous LN obj found, then insert new one.
-							if (nData.is1PChannel())
-								nData.set1PLNKey(nData.getKeyNum());
-							if (nData.is2PChannel())
-								nData.set2PLNKey(nData.getKeyNum());
-							boolean foundObj = false;
-							for (int _i=bd.bmsdata.size()-1; _i>=0 ;_i--)
-							{
-								BMSKeyData oldData = bd.bmsdata.get(_i);
-								//if (nData.key == oldData.key && oldData.ebeat == 0) {
-								if (nData.key == oldData.key) {
-									//oldData.ebeat = nData.ebeat;
-									//oldData.evalue = nData.value;
-									bd.bmsdata.add(nData);
-									foundObj = true;
-									break;
-								}
-							}
-							
-							if (!foundObj) {
-								bd.bmsdata.add(nData);
-							} else {
-								bd.notecnt--;	// LN needs 2 key data, so 1 discount to correct note number.
-							}
-						} else {
-							bd.bmsdata.add(nData);
-						}
+						// BMS key
+						// if you need data for playing, use convertLNOBJ() in BMSData class.
+						bd.bmsdata.add(nData);
 					} else if (nData.is1PTransChannel() || nData.is2PTransChannel()) {
 						// transparent key sound
 						bd.bmsdata.add(nData);
@@ -441,7 +436,6 @@ public class BMSParser {
 							
 							BMSKeyData oldData = bd.bmsdata.get(_i);
 							if (nData.key == oldData.key) {
-								//if (LNType == 1 && oldData.ebeat == 0) {
 								if (LNType == 1) {
 									// LNTYPE 1: only uses clean one
 									//oldData.ebeat = nData.ebeat;
@@ -451,6 +445,7 @@ public class BMSParser {
 									break;
 								} else if (LNType == 2) {
 									// LNTYPE 2: able to use dirty one when continuous.
+									// TODO it may not have same key. have to be fixed.
 									//oldData.ebeat = nData.ebeat;
 									//oldData.evalue = nData.value;
 									if (LNKey[channel] != oldData)
@@ -463,6 +458,7 @@ public class BMSParser {
 						}
 						
 						if (!foundObj) {
+							nData.isLNfirst = true;
 							bd.bmsdata.add(nData);
 							LNKey[channel] = nData;
 						} else {

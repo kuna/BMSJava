@@ -111,8 +111,8 @@ public class BMSWriter {
 			while (datas.get(i).getBeat() >= beat) {
 				// midi length first
 				if (bd.getBeatLength(beat-1) != 1)
-					data += String.format("#%03d02:", beat-1) + Double.toString(bd.getBeatLength(beat-1)) + "\n";
-				data += ProcessChannels(tmp) + "\n";
+					data += String.format("#%03d02:", beat-1) + Double.toString(bd.getBeatLength(beat-1)) + "\r\n";
+				data += ProcessChannels(tmp) + "\r\n";
 				beat ++;
 				tmp.clear();
 			}
@@ -161,7 +161,7 @@ public class BMSWriter {
 	
 	private static String MetaData(String name, String val) {
 		if (val != null && !val.equals("")) {
-			return name + " " + val + "\n";
+			return name + " " + val + "\r\n";
 		}
 		return "";
 	}
@@ -189,7 +189,7 @@ public class BMSWriter {
 				}
 				
 				String s = GetBeatString(t);
-				r += s + "\n";
+				r += s + "\r\n";
 				lcnt++;
 			}
 		}
@@ -199,7 +199,7 @@ public class BMSWriter {
 			tmp = BMSUtil.ExtractChannel(datas, i);
 			String s = GetBeatString(tmp);
 			if (s != null)
-				r += s + "\n";
+				r += s + "\r\n";
 		}
 		
 		return r;

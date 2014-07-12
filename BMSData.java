@@ -1,6 +1,7 @@
 package com.kuna.rhythmus.bmsdata;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /*
@@ -10,7 +11,7 @@ import java.util.List;
  */
 
 public class BMSData {
-	public int player;
+	public int player = 1;	// default is SP
 	public String title;
 	public String subtitle;
 	public String genre;
@@ -27,16 +28,17 @@ public class BMSData {
 	public double[] str_bpm = new double[1322];
 	public double[] str_stop = new double[1322];
 	public boolean[] LNObj = new boolean[1322];
+	
+	public int key;										// custom; 5-7-10-14
 
-	public int[] beat_numerator = new int[1024];		// MAXIMUM_BEAT
-	public int[] beat_denominator = new int[1024];		// MAXIMUM_BEAT
+	public int[] beat_numerator = new int[1600];		// MAXIMUM_BEAT
+	public int[] beat_denominator = new int[1600];		// MAXIMUM_BEAT
 	
 	public List<BMSKeyData> bmsdata = new ArrayList<BMSKeyData>();	// MAXIMUM_OBJECT (Trans object+hit object+STOP+BPM)
 	public List<BMSKeyData> bgadata = new ArrayList<BMSKeyData>();	// BGA
 	public List<BMSKeyData> bgmdata = new ArrayList<BMSKeyData>();	// BGM
 	public int notecnt;
 	public double time;
-	public int keycount;
 	
 	// bms file specific data
 	public String hash;
@@ -100,42 +102,40 @@ public class BMSData {
 		return beat;
 	}
 	
-	public double getTimeFromBeat(double beat) {
-		double _bpm = BPM;		// BPM for parsing
-		double _time = 0;		// time for parsing
-		double _beat = 0;		// beat for parsing
+	public double getTimeFromBeat(List<BMSKeyData> bpmarr, double beat) {
+		double bpm = BPM;
+		int nbeat = 0;
+		double decimal = 0;
+		double time = 0;
 		
-		for (int i=0; i<bmsdata.size(); i++) {
-			BMSKeyData d = bmsdata.get(i);
-			
-			// check midi length
-			while (d.beat >= (int)_beat+1) {
-				if ((int)_beat+1 > beat && beat > _beat) {
-					return _time + ((int)_beat+1-beat) * (1.0f/_bpm*60) 
-							* 4 * getBeatNumerator((int) beat) / getBeatDenominator((int) beat);
-				}
-				_time += ((int)_beat+1-_beat) * (1.0f/_bpm*60) 
-						* 4 * getBeatNumerator((int) beat) / getBeatDenominator((int) beat);
-				_beat = (int)_beat+1;
+		for (BMSKeyData b: bpmarr) {
+			while (nbeat < (int)b.getBeat() && nbeat < (int)beat) {
+				time += (1.0 / bpm * 60) * getBeatLength(nbeat) * (1-decimal);
+				decimal = 0;
+				nbeat++;
 			}
 			
-			if (d.beat > beat && beat > _beat) {
-				return _time + (beat - _beat) * (1.0f / _bpm * 60) 
-						* 4 * getBeatNumerator((int) beat) / getBeatDenominator((int) beat);
+			// new BPM applies first
+			if (nbeat == (int)b.getBeat()) {
+				decimal = b.getBeat()%1;
+				time += (1.0 / bpm * 60) * getBeatLength(nbeat) * decimal;
+				bpm  = b.getValue();
 			}
-			_time += (d.beat - _beat) * (1.0f / _bpm * 60) 
-					* 4 * getBeatNumerator((int) beat) / getBeatDenominator((int) beat);
 			
-			if (d.key == 3 || d.key == 8 )	// BPM
-				_bpm = d.value;
-			if (d.key == 9)
-				_time += d.value;
-			
-			_beat = d.beat;
+			if (nbeat == (int)beat)
+				break;
 		}
 		
-		// time is over
-		return _time;
+		// calculate left one
+		while (nbeat < (int)beat) {
+			time += (1.0 / bpm * 60) * getBeatLength(nbeat) * (1-decimal);
+			decimal = 0;
+			nbeat++;
+		}
+
+		time += (1.0 / bpm * 60) * getBeatLength(nbeat) * (beat%1);
+		
+		return time*4;
 	}
 	
 	public double getBPMFromBeat(double beat) {
@@ -226,38 +226,42 @@ public class BMSData {
 				* decimal;
 		return r;
 	}
-
 	
+	public static final double GENERAL_BPM = 130.0;
 	public double getNotePositionWithBPM(int beatHeight, List<BMSKeyData> bpmarr, double b) {
-		// may need lots of performance
+		// may need lots of calculation
 		int beat = (int)b;
-		double decimal = b;
+		double decimal = b%1;
 		double nbpm = BPM;
 		
 		int beatNum = 0;
 		double beatDecimal = 0;
-		int r = 0;
+		double r = 0;
 		for (BMSKeyData bpm: bpmarr) {
-			while (beatNum < bpm.getBeat() && beatNum < beat) {
-				r += beatHeight * getBeatLength(beatNum) * (1-beatDecimal) * nbpm;
+			while (beatNum < (int)bpm.getBeat() && beatNum < beat) {	// TODO remove (int) to rollback
+				r += beatHeight * getBeatLength(beatNum) * (1-beatDecimal) * nbpm / GENERAL_BPM;
 				beatNum++;
 				beatDecimal = 0;
 			}
+			
+			// new BPM applies first (in case of xx.0)
+			if (beatNum == (int)bpm.getBeat()) {
+				r += beatHeight * getBeatLength(beatNum) * (bpm.getBeat()%1 - beatDecimal) * nbpm / GENERAL_BPM;
+				beatDecimal = bpm.getBeat() % 1;
+				nbpm = bpm.getValue();
+			}
+			
 			if (beatNum == beat)
 				break;
-			
-			beatDecimal = bpm.getValue() % 1;
-			r += beatHeight * getBeatLength(beatNum) * beatDecimal * nbpm;
-			nbpm = bpm.getValue();
 		}
 		
 		// calculate left beat
 		while (beatNum < beat) {
-			r += beatHeight * getBeatLength(beatNum) * nbpm;
+			r += beatHeight * getBeatLength(beatNum) * (1-beatDecimal) * nbpm / GENERAL_BPM;
 			beatNum++;
 			beatDecimal = 0;
 		}
-		r += beatHeight * getBeatLength(beatNum) * nbpm * decimal;
+		r += beatHeight * getBeatLength(beatNum) * nbpm / GENERAL_BPM * decimal;
 		return r;
 	}
 	
@@ -410,6 +414,72 @@ public class BMSData {
 		return false;
 	}
 	
+	public void removeChannel(int[] channels) {
+		/* in real, it doesn't removed but inserted into BGM channel! */
+		for (int i=0; i<bmsdata.size(); i++) {
+			int nc = bmsdata.get(i).getChannel();
+			boolean b = false;
+			for (int c: channels) {
+				if (nc == c) {
+					b = true;
+					break;
+				}
+			}
+			if (b) {
+				BMSKeyData bkd = bmsdata.remove(i);
+				bkd.setChannel(1);	//BGM
+				bgmdata.add(bkd);
+				i--;
+				notecnt--;
+			}
+		}
+		Collections.sort(bgmdata);
+	}
+	
+	public boolean is5Key() {
+		// check channel
+		for (BMSKeyData bkd: bmsdata) {
+			if (bkd.getKeyNum() == 6 || bkd.getKeyNum() == 7) {
+				if (bkd.is1PChannel() || bkd.is1PLNChannel())
+					return false;
+			}
+		}
+		
+		return true;
+	}
+	
+	public boolean is10Key() {
+		// check channel
+		for (BMSKeyData bkd: bmsdata) {
+			if (bkd.getKeyNum() == 6 || bkd.getKeyNum() == 7) {
+				return false;
+			}
+		}
+		
+		return true;
+	}
+	
+	public int checkKey() {
+		if (player == 1) {
+			if (is5Key())
+				key = 5;
+			else
+				key = 7;
+		} else {
+			if (is10Key())
+				key = 10;
+			else
+				key = 14;
+		}
+		
+		return key;
+	}
+	
+	public int getTotal() {
+		total = (int) (notecnt*0.16f + 160);
+		return total;
+	}
+	
 	public void addNote(BMSKeyData bkd) {
 		bmsdata.add(bkd);
 	}
@@ -418,5 +488,39 @@ public class BMSData {
 		bmsdata.clear();
 		bgadata.clear();
 		bgmdata.clear();
+	}
+	
+	public void convertLNOBJ() {
+		// for playing, this command is necessary
+		// before sort this command, you must sort bmsdata array. (default status)
+		// check LNOBJ command
+		
+		BMSKeyData lnPrevObj[] = new BMSKeyData[50];
+		
+		for (BMSKeyData b: bmsdata) {
+			if (b.isSTOPChannel() || b.isBPMChannel() || b.isBPMExtChannel())
+				continue;
+			
+			int o = b.getKeyNum() + (b.is1PChannel()?0:8);
+			
+			if (LNObj[(int)b.getValue()]) {
+				if (lnPrevObj[o] == null)
+					continue;	// ignores
+				
+				if (b.is1PChannel()) {
+					b.set1PLNKey(b.getKeyNum());
+					lnPrevObj[o].set1PLNKey(b.getKeyNum());
+				} else if (b.is2PChannel()) {
+					b.set2PLNKey(b.getKeyNum());
+					lnPrevObj[o].set2PLNKey(b.getKeyNum());
+				}
+				lnPrevObj[o].isLNfirst = true;
+				notecnt--;	// LN needs 2 key data, so 1 discount to correct note number.
+				
+				lnPrevObj[o] = null;
+			} else {
+				lnPrevObj[o] = b;
+			}
+		}
 	}
 }
